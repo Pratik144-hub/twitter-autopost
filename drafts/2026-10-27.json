@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-27",
+  "created_at": "2026-10-26T00:56:42.630798+05:30",
+  "handle": "dev_pratik144",
+  "slots": [
+    {
+      "slot": "09:30",
+      "kind": "value",
+      "due_at": "2026-10-27T09:47:00+05:30",
+      "text": "Day 4 of #100DaysOfCode 🚀\n\nBiggest mistake I made when starting DSA:\nMemorizing solutions instead of patterns.\n\n✅ 2 problems solved deeply > 10 copied\n✅ Pen & paper dry-run first\n✅ Review yesterday's logic\n\nConsistency over intensity. Always 💪\n\n#DSA #Cpp #CodingJourney",
+      "image": null,
+      "posted": false,
+      "tweet_url": null
+    },
+    {
+      "slot": "13:30",
+      "kind": "ai_update",
+      "due_at": "2026-10-27T13:32:00+05:30",
+      "text": "🔥 What happened in AI today:\n\n✅ Claude Duet: Proactive real-time AI collaboration\n✅ Small models: 10-year CNN beats frontier LLMs\n⚡ Shift from chatbots to autonomous terminal agents\n\nWhich update surprised you most? 👇\n\n#AI #Tech",
+      "image": null,
+      "posted": false,
+      "tweet_url": null
+    },
+    {
+      "slot": "19:30",
+      "kind": "value",
+      "due_at": "2026-10-27T19:21:00+05:30",
+      "text": "Stage par trophy lene ka dream to sabka hota hai 🏆\n\nReality:\n• Hackathons: \"Bhai tu CP wala hai, UI kon banayega?\"\n• CP contests: 4th year seniors abhi bhi participate karke prize le jate hain 😭\n\nDukh dard peeda. Kahan jayein? 👇\n\n#BTech #Hackathon #CP #CodingLife",
+      "image": null,
+      "posted": false,
+      "tweet_url": null
+    },
+    {
+      "slot": "23:00",
+      "kind": "value",
+      "due_at": "2026-10-27T23:19:00+05:30",
+      "text": "The reality of AI coding nobody talks about:\n\n5 mins: \"Generate this backend\" 🤖\n4 hours: Debugging a hallucinated variable that doesn't exist 💀\n\nThe real dev skill in 2026 isn't prompt engineering.\n\nIt's reading & debugging code you didn't write.\n\n#Coding #WebDev #AI",
+      "image": null,
+      "posted": false,
+      "tweet_url": null
+    }
+  ]
+}

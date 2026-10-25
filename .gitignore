@@ -1,11 +1,11 @@
 # nothing here is part of the shared skill - it is your install
 config.json
 state.json
+secrets.json
 .tick
 
 # generated content
 swipe/
-drafts/
 shots/
 scratch/
 

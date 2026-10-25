@@ -144,10 +144,21 @@ LOGIN_JS = r"""
   const url = location.href;
   const btn = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]');
   const raw = btn ? (btn.innerText || '') : '';
-  const m = raw.match(/@([A-Za-z0-9_]{1,20})/);
+  let m = raw.match(/@([A-Za-z0-9_]{1,20})/);
+  
+  // Also check UserAvatar-Container-<handle> inside the button
+  const avatar = document.querySelector('[data-testid^="UserAvatar-Container-"]');
+  const avatarHandle = avatar ? (avatar.getAttribute('data-testid') || '').replace('UserAvatar-Container-', '') : null;
+
   const prof = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
   const ph = prof ? (prof.getAttribute('href') || '').replace(/^\//, '') : null;
-  const h = (m ? m[1] : ph) || null;
+  
+  // Also check nav profile link
+  const links = Array.from(document.querySelectorAll('a[href*="/"]')).map(a => a.getAttribute('href'));
+  const explicitProfile = links.find(h => /^\/[A-Za-z0-9_]{1,20}$/.test(h) && !['/home', '/explore', '/notifications', '/messages', '/bookmarks', '/jobs', '/premium', '/verified-choose', '/lists', '/settings', '/i'].includes(h));
+  const linkHandle = explicitProfile ? explicitProfile.replace(/^\//, '') : null;
+
+  const h = (m ? m[1] : null) || avatarHandle || ph || linkHandle || null;
   const login_form = !!document.querySelector('input[name="text"], input[autocomplete="username"]');
   return JSON.stringify({url, handle: h, logged_in: !!h, login_form,
                          raw: raw.replace(/\n/g, ' ').slice(0, 120)});
@@ -480,7 +491,7 @@ async def do_post(text: str, image: Path | None = None, kind: str = "value",
     shot_profile = None
     try:
         shot_profile = (await capture("profile"))["screenshot"]
-    except (CDPError, OSError, asyncio.TimeoutError) as err:
+    except Exception as err:
         print(f"  ! profile screenshot failed: {err}", file=sys.stderr)
 
     return {"posted": bool(match), "verified": bool(match), "day": day,

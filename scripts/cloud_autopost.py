@@ -18,6 +18,17 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import post_api
 
 
+def log_summary(text: str) -> None:
+    print(text)
+    summary_path = os.getenv("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        try:
+            with open(summary_path, "a", encoding="utf-8") as f:
+                f.write(text + "\n")
+        except Exception:
+            pass
+
+
 def main() -> int:
     # 1. Check schedule
     proc = subprocess.run(
@@ -30,13 +41,14 @@ def main() -> int:
 
     output = (proc.stdout or "").strip()
     if not output or output == "IDLE":
-        print("Schedule check: IDLE (nothing due right now).")
+        log_summary("### ⏱️ Schedule check: IDLE\nNo post is due right now.")
         return 0
 
     try:
         draft = json.loads(output)
     except Exception as e:
-        print(f"Error parsing draft JSON: {e}\nRaw output: {output[:200]}", file=sys.stderr)
+        msg = f"❌ Error parsing draft JSON: {e}\nRaw output: {output[:200]}"
+        log_summary(f"### {msg}")
         return 1
 
     slot = draft.get("slot")
@@ -44,19 +56,27 @@ def main() -> int:
     date = draft.get("date")
 
     if not slot or not text:
-        print(f"Draft missing slot or text: {draft}", file=sys.stderr)
+        log_summary(f"### ❌ Draft missing slot or text:\n```json\n{json.dumps(draft, indent=2)}\n```")
         return 1
 
-    print(f"🔔 Slot {slot} is DUE! Publishing via Twitter API v2...")
+    log_summary(f"### 🔔 Slot `{slot}` is DUE! Publishing via Twitter API v2...")
 
     # 2. Publish via API
-    res = post_api.post_tweet(text)
+    try:
+        res = post_api.post_tweet(text)
+    except Exception as err:
+        log_summary(f"### ❌ Exception in post_tweet:\n```\n{err}\n```")
+        return 1
+
     if not res.get("ok"):
-        print(f"❌ Tweet publication failed: {res.get('error')}", file=sys.stderr)
+        status = res.get("status_code", "unknown")
+        err = res.get("error", {})
+        raw = res.get("raw", "")
+        log_summary(f"### ❌ Tweet publication failed!\n* **Status Code:** `{status}`\n* **Error Details:**\n```json\n{json.dumps(err, indent=2) if isinstance(err, dict) else str(err)}\n```\n```\n{raw}\n```")
         return 1
 
     tweet_url = res.get("tweet_url", "")
-    print(f"🎉 Successfully published tweet! URL: {tweet_url}")
+    log_summary(f"### 🎉 Successfully published tweet!\n* **URL:** [{tweet_url}]({tweet_url})")
 
     # 3. Mark slot as posted in drafts/
     mark_cmd = [
@@ -72,7 +92,7 @@ def main() -> int:
         mark_cmd.extend(["--url", tweet_url])
 
     subprocess.run(mark_cmd, cwd=str(ROOT), capture_output=True, text=True)
-    print(f"✅ Slot {slot} marked as POSTED in plan.")
+    log_summary(f"✅ Slot `{slot}` marked as POSTED in schedule.")
     return 0
 
 

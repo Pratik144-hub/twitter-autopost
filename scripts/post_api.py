@@ -1,35 +1,52 @@
 #!/usr/bin/env python
 """Publish tweets directly via Twitter API v2 using OAuth 1.0a.
 
-Zero external dependencies - uses standard library urllib, hmac, hashlib.
-Works seamlessly in GitHub Actions, cloud servers, or local scripts.
+Uses requests-oauthlib for 100% reliable Twitter API v2 authentication.
+Handles multiple environment variable naming conventions and strips quotes.
 """
 from __future__ import annotations
 
 import argparse
-import base64
-import hashlib
-import hmac
 import json
 import os
 import sys
-import time
-import urllib.parse
-import urllib.request
-import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SECRETS_FILE = ROOT / "secrets.json"
 
 
+def _clean(val: str | None) -> str:
+    if not val:
+        return ""
+    return str(val).strip().strip('"').strip("'").strip()
+
+
+def get_first_env(*keys: str) -> str:
+    for k in keys:
+        val = os.getenv(k)
+        if val:
+            return _clean(val)
+    return ""
+
+
 def get_credentials() -> dict[str, str]:
     """Load credentials from environment variables or secrets.json."""
     creds = {
-        "consumer_key": os.getenv("TWITTER_CONSUMER_KEY", "").strip(),
-        "consumer_secret": os.getenv("TWITTER_CONSUMER_SECRET", "").strip(),
-        "access_token": os.getenv("TWITTER_ACCESS_TOKEN", "").strip(),
-        "access_token_secret": os.getenv("TWITTER_ACCESS_TOKEN_SECRET", "").strip(),
+        "consumer_key": get_first_env(
+            "TWITTER_CONSUMER_KEY", "TWITTER_API_KEY", "API_KEY", "CONSUMER_KEY"
+        ),
+        "consumer_secret": get_first_env(
+            "TWITTER_CONSUMER_SECRET",
+            "TWITTER_API_SECRET",
+            "API_KEY_SECRET",
+            "API_SECRET",
+            "CONSUMER_SECRET",
+        ),
+        "access_token": get_first_env("TWITTER_ACCESS_TOKEN", "ACCESS_TOKEN"),
+        "access_token_secret": get_first_env(
+            "TWITTER_ACCESS_TOKEN_SECRET", "ACCESS_TOKEN_SECRET", "ACCESS_SECRET"
+        ),
     }
 
     if not all(creds.values()) and SECRETS_FILE.exists():
@@ -37,98 +54,66 @@ def get_credentials() -> dict[str, str]:
             saved = json.loads(SECRETS_FILE.read_text(encoding="utf-8"))
             for k in creds:
                 if not creds[k]:
-                    creds[k] = saved.get(k, "").strip()
+                    creds[k] = _clean(saved.get(k, ""))
         except Exception as e:
             print(f"Warning: could not read {SECRETS_FILE}: {e}", file=sys.stderr)
+
+    # Print credential diagnostic summary (masks actual values)
+    print("--- Twitter API Credentials Diagnostic ---")
+    for k, v in creds.items():
+        if v:
+            masked = v[:3] + "..." + v[-3:] if len(v) > 6 else "***"
+            print(f"  {k}: [FOUND] (length={len(v)}, sample={masked})")
+        else:
+            print(f"  {k}: [MISSING]")
+    print("------------------------------------------")
 
     missing = [k for k, v in creds.items() if not v]
     if missing:
         raise ValueError(
             f"Missing Twitter API credentials: {', '.join(missing)}.\n"
-            f"Set them in environment variables or {SECRETS_FILE}."
+            f"Please verify these secrets are added in your GitHub repository settings."
         )
 
     return creds
 
 
-def pct_encode(s: str) -> str:
-    """OAuth 1.0 percent-encode conforming to RFC 5849."""
-    return urllib.parse.quote(str(s), safe="")
-
-
-def build_oauth1_header(
-    method: str,
-    url: str,
-    creds: dict[str, str],
-    extra_params: dict[str, str] | None = None,
-) -> str:
-    """Generate OAuth 1.0a Authorization header."""
-    params = {
-        "oauth_consumer_key": creds["consumer_key"],
-        "oauth_nonce": uuid.uuid4().hex,
-        "oauth_signature_method": "HMAC-SHA1",
-        "oauth_timestamp": str(int(time.time())),
-        "oauth_token": creds["access_token"],
-        "oauth_version": "1.0",
-    }
-    if extra_params:
-        params.update(extra_params)
-
-    # 1. Normalize and sort parameters
-    sorted_pairs = sorted(
-        (pct_encode(k), pct_encode(v)) for k, v in params.items()
-    )
-    param_str = "&".join(f"{k}={v}" for k, v in sorted_pairs)
-
-    # 2. Build signature base string
-    base_url = url.split("?")[0]
-    base_str = f"{method.upper()}&{pct_encode(base_url)}&{pct_encode(param_str)}"
-
-    # 3. Create signing key
-    signing_key = f"{pct_encode(creds['consumer_secret'])}&{pct_encode(creds['access_token_secret'])}"
-
-    # 4. Generate HMAC-SHA1 signature
-    hashed = hmac.new(
-        signing_key.encode("utf-8"),
-        base_str.encode("utf-8"),
-        hashlib.sha1,
-    )
-    signature = base64.b64encode(hashed.digest()).decode("utf-8")
-    params["oauth_signature"] = signature
-
-    # 5. Format Authorization header
-    auth_header_parts = [
-        f'{pct_encode(k)}="{pct_encode(v)}"'
-        for k, v in sorted(params.items())
-        if k.startswith("oauth_")
-    ]
-    return "OAuth " + ", ".join(auth_header_parts)
-
-
 def post_tweet(text: str) -> dict:
-    """Post a tweet using Twitter API v2 endpoint."""
-    url = "https://api.twitter.com/2/tweets"
+    """Post a tweet using Twitter API v2 endpoint via requests-oauthlib."""
+    try:
+        from requests_oauthlib import OAuth1
+        import requests
+    except ImportError:
+        raise RuntimeError("Missing dependencies. Run: pip install requests requests-oauthlib")
+
     creds = get_credentials()
+    url = "https://api.twitter.com/2/tweets"
 
-    payload = json.dumps({"text": text}).encode("utf-8")
-    auth_header = build_oauth1_header("POST", url, creds)
-
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        headers={
-            "Authorization": auth_header,
-            "Content-Type": "application/json",
-            "User-Agent": "TweetyTweets/1.0",
-        },
-        method="POST",
+    auth = OAuth1(
+        client_key=creds["consumer_key"],
+        client_secret=creds["consumer_secret"],
+        resource_owner_key=creds["access_token"],
+        resource_owner_secret=creds["access_token_secret"],
     )
+
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "TweetyTweets/1.0",
+    }
+
+    payload = {"text": text}
 
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            tweet_id = data.get("data", {}).get("id")
-            tweet_url = f"https://x.com/i/status/{tweet_id}" if tweet_id else None
+        response = requests.post(url, auth=auth, json=payload, headers=headers, timeout=30)
+        status_code = response.status_code
+        try:
+            data = response.json()
+        except Exception:
+            data = {"raw_text": response.text}
+
+        if 200 <= status_code < 300 and "data" in data and "id" in data["data"]:
+            tweet_id = data["data"]["id"]
+            tweet_url = f"https://x.com/i/status/{tweet_id}"
             return {
                 "ok": True,
                 "id": tweet_id,
@@ -136,13 +121,14 @@ def post_tweet(text: str) -> dict:
                 "text": text,
                 "response": data,
             }
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
-        return {
-            "ok": False,
-            "status_code": e.code,
-            "error": err_body,
-        }
+        else:
+            return {
+                "ok": False,
+                "status_code": status_code,
+                "error": data,
+                "raw": response.text,
+            }
+
     except Exception as e:
         return {
             "ok": False,

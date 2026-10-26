@@ -31,8 +31,8 @@ DEFAULTS: dict[str, Any] = {
     "premium": None,                    # None = unknown. Ask the user, then confirm with measure.
     "max_chars": None,                  # None = not measured. Fill via: post.py measure --save
     "max_chars_verified": False,        # True only after a real measurement on the account
-    "timezone": "local",                # e.g. "Asia/Kolkata"; "local" = machine tz
-    "slots": ["13:00", "16:00", "20:00", "00:00"],
+    "timezone": "Asia/Kolkata",         # default to Asia/Kolkata so cloud runners match IST
+    "slots": ["09:30", "13:30", "19:30", "23:00"],
     "jitter_minutes": 45,
     "min_gap_hours": 3,
     "ai_update_slot": "16:00",
